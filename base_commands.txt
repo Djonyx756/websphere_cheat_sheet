@@ -133,3 +133,24 @@ runmqtrm -m host1/echo.hub -q echo.initq
 Отправка запроса службе:
 # Программа amqsech генерирует ответы в виде копий исходных сообщений и направляет их очереди ответов, заданной в дескрипторах сообщений запросов.
 amqsreq echo host1/echo.hub echo.replies.manual
+
+Создание объекта модельной очереди для динамической очереди ответов:
+host1/echo.hub:
+DEFINE QMODEL('echo.replies.tempdyn') + DESCR('Temporary dynamic reply-to
+queues for echo service')
+
+DISPLAY QMODEL('echo.replies.tempdyn') DESCR DEFTYPE
+
+Отправка запроса с использованием временной динамической очереди ответов:
+amqsreq echo host1/echo.hub echo.replies.tempdyn
+
+host1/echo.hub:
+DISPLAY QL('AMQ.*') DEFTYPE DESCR
+
+Запуск брокера на менеджере очередей:
+ALTER SERVICE('SYSTEM.BROKER') CONTROL(QMGR)
+START SERVICE('SYSTEM.BROKER')
+
+Настройка менеджера очередей для работы с JMS:
+runmqsc host1/jmspubsub < /opt/mqm/java/bin/MQJMS_PSQ.mqsc
+
