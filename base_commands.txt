@@ -154,3 +154,79 @@ START SERVICE('SYSTEM.BROKER')
 Настройка менеджера очередей для работы с JMS:
 runmqsc host1/jmspubsub < /opt/mqm/java/bin/MQJMS_PSQ.mqsc
 
+Создание и запуск слушателя:
+DEFINE LISTENER('LISTENER.TCP') + TRPTYPE(TCP) PORT(9001) CONTROL(QMGR) + DESCR('TCP/IP Listener for queue manager') - создаем объект слушатель
+START LISTENER('LISTENER.TCP') - запускаем слушатель
+
+Создание объекта канала серверного подключения:
+DEFINE CHANNEL('all.clients') CHLTYPE(SVRCONN) MCAUSER('имя_пользователя')
+
+Подключение с использованием переменной кружения MQSERVER:
+Определите в локальном менеджере очередей очередь с произвольным именем (в данном примере – queue1 ).
+MQSERVER=all.clients/TCP/'host1.example.com(9001)' export MQSERVER - Присвойте переменной окружения MQSERVER
+amqsputc queue1 host1/echo.hub - Добавьте сообщения в очередь с помощью команды amqsputc
+amqsbcgc queue1 host1/echo.hub > queue1.txt - просмотр сообщений в очереди воспользуйтесь командой amqsbcgc
+amqsgetc queue1 host1/echo.hub - извлечение сообщения из очереди командой amqsgetc:
+amqsreqc echo host1/echo.hub echo.replies.manual - запрос эхо-службы, запускаемой с помощью триггера для очереди host1/echo.hub, выполните следующую команду
+
+Удаленное администрирование менеджера очередей:
+strmqcsv имя_менеджера_очередей - ручной запуск командный сервер для менеджера очередей
+DEFINE QMODEL('SYSTEM.MQEXPLORER.REPLY.MODEL') DEFTYPE(TEMPDYN) - определение нужной модельной очереди
+
+Создание очереди недоставленных сообщений для центрального менеджера:
+DEFINE QLOCAL('dead.letters') - создать объект локальной очереди
+ALTER QMGR DEADQ('dead.letters') - настроить его объект для использования ранее созданной очереди недоставленных сообщений
+
+Создание объекта receiver-канала для центрального менеджера очередей:
+DEFINE CHANNEL('to.host1/echo.hub') CHLTYPE(RCVR)
+DISPLAY CHANNEL('to.host1/echo.hub') - проверка атрибутов канала
+
+Создание транспортной очереди для периферийного менеджера очередей:
+DEFINE QLOCAL('host1/echo.hub') USAGE(XMITQ) + DESCR('Transmission queue for
+messages to host1/echo.hub')
+
+Создание объекта sender-канала для периферийного менеджера очередей:
+DEFINE CHANNEL('to.host1/echo.hub') CHLTYPE(SDR) + CONNAME('host1.example.com(9001)') XMITQ('host1/echo.hub')
+DISPLAY CHANNEL('to.host1/echo.hub') - проверка атрибутов канала
+
+Проверка канала с помощью команды ping WebSphere MQ:
+PING CHANNEL('to.host1/echo.hub')
+# Примечание Если команда ping вернет ошибку, проверьте следующее:
+# в объекте sender-канала указано верное хост-имя или IP-адрес, а также номер порта для менеджера очередей host1/echo.hub ;
+# имя объекта sender-канала соответствует имени объекта receiver-канала, объявленного в host1/echo.hub, вплоть до регистра символов;
+# у менеджера очередей host1/echo.hub имеется активный слушатель.
+
+Настройка и активация канала связи с центральным менеджером очередей:
+ALTER QLOCAL('host1/echo.hub') TRIGGER TRIGTYPE(FIRST) + TRIGDATA('to.host1/
+echo.hub') INITQ('SYSTEM.CHANNEL.INITQ')
+
+Отправка тестового сообщения по каналу центральному менеджеру очередей:
+amqsput queue1 host2/spoke 8208 0 host1/echo.hub
+# Эту команду вызывают со следующими параметрами:
+# queue1 – имя очереди в host1/echo.hub ;
+# host2/spoke – имя менеджера очередей, к которому требуется подключиться;
+# 8208 – десятичный код параметров запроса, передаваемый при вызове MQOPEN (для данного примера этот параметр не важен, он требует открыть очередь для добавления сообщений и приводит к неудаче последующие попытки добавления сообщений если менеджер очередей находится в процессе остановки);
+# 0 – отсутствие параметров при вызове MQCLOSE (для данного примера этот параметр не важен);
+# host1/echo.hub – имя менеджера очередей, заданного при вызове MQOPEN. Представляет менеджер очередей, который используется в этом примере. Видно, что его значение соответствует именам удаленного менеджера очередей и транспортной очереди, применяемой менеджером host2/spoke для отправки сообщений.
+DISPLAY CHSTATUS('to.host1/echo.hub') - просмотр состояния канала
+START CHANNEL('to.host1/echo.hub') - ручной щапуск канала на стороне отправителя
+STOP CHANNEL('to.host1/echo.hub') MODE(INACTIVE) -остановка канала, не блокируя его
+
+Создание объекта receiver-канала для периферийного менеджера очередей:
+DEFINE CHANNEL('to.host2/spoke') CHLTYPE(RCVR)
+
+Создание транспортной очереди для центрального менеджера очередей:
+DEFINE QLOCAL('host2/spoke') USAGE(XMITQ) + TRIGGER TRIGTYPE(FIRST) +
+TRIGDATA('to.host2/spoke') INITQ('SYSTEM.CHANNEL.INITQ') + DESCR('Transmission
+queue for messages to host2/spoke')
+
+Создание объекта sender-канала для центрального менеджера очередей:
+DEFINE CHANNEL('to.host2/spoke') CHLTYPE(SDR) + CONNAME('host1.example.
+com(9002)') XMITQ('host2/spoke')
+amqsput queue1 host1/echo.hub 8208 0 host2/spokeamqsput queue1 host1/echo.hub 8208 0 host2/spoke - создание тестовой очереди
+
+Локальное определение удаленной очереди:
+DEFINE QREMOTE('echo') RNAME('echo') RQMNAME('host1/echo.hub') + DESCR('Local
+definition for routing requests for the echo service')
+
+
