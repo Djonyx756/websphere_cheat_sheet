@@ -229,4 +229,43 @@ amqsput queue1 host1/echo.hub 8208 0 host2/spokeamqsput queue1 host1/echo.hub 82
 DEFINE QREMOTE('echo') RNAME('echo') RQMNAME('host1/echo.hub') + DESCR('Local
 definition for routing requests for the echo service')
 
+Определение очереди ответов для периферийного менеджера очередей:
+DEFINE QMODEL('echo.replies')
+
+Запрос службы echo с периферийного менеджера очередей:
+amqsreq echo host2/spoke echo.replies
+
+Назначение менеджеров очередей с полными репозиториями:
+ALTER QMGR REPOS('example.cluster')
+
+Создание объектов кластерных receiver-каналов:
+DEFINE CHANNEL('clus.host1/full') CHLTYPE(CLUSRCVR) + CONNAME('host1.example.com(9031)') CLUSTER('example.cluster')
+
+Создание объектов кластерных sender-каналов:
+# Описанные действия выполняются сначала над менеджерами очередей, содержащими полные репозитории данных кластера ( host1/full и host2/full ), а затем над менеджерами очередей, содержащими частичные репозитории ( host1/partial и host2/partial ).
+DEFINE CHANNEL('clus.host2/full') CHLTYPE(CLUSSDR) + CONNAME('host2.example.com(9033)') CLUSTER('example.cluster')
+
+Предоставление общего доступа к очередям кластера:
+DEFINE QLOCAL('cluster.queue') CLUSTER('example.cluster')
+
+Активация балансировки нагрузки для локального экземпляра очереди:
+ALTER QMGR CLWLUSEQ(ANY)
+
+Балансировка нагрузки по обработке сообщений очередями:
+i=0; while [ $i -lt 100 ]; do let i=i+1; echo Message$i | amqsput cluster.queue host1/partial; done - UNIX
+FOR /L %1 IN (1,1,100) DO echo Message%1 | amqsput cluster.queue host1/partia - Windows
+
+Предоставление общего доступа к службе echo в кластере:
+# Создайте объект кластерного receiver-канала со следующими параметрами:
+# имя: clus.host1/echo.hub ;
+# имя подключения (атрибут CONNAME ): host1.example.com(9001) ;
+# кластер (атрибут CLUSTER ): example.cluster.
+# Создайте объект кластерного sender-канала:
+# имя: clus.host1/full ;
+# имя подключения (атрибут CONNAME ): host1.example.com(9031) ;
+# кластер (атрибут CLUSTER ): example.cluster.
+# Измените объект локальной очереди echo, чтобы опубликовать его в кластере.
+ALTER QLOCAL('echo') CLUSTER('example.cluster')
+
+
 
